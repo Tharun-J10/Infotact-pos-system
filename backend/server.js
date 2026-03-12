@@ -2,8 +2,10 @@ const express = require("express");
 
 const app = express();
 
+app.use(express.json());
+
 app.get("/", (req, res) => {
-  res.send("Backend running successfully");
+  res.send("POS Backend running successfully");
 });
 
 app.listen(5000, () => {
