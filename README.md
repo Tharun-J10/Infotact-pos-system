@@ -1,4 +1,23 @@
+# Infotact POS System
 
-# Infotact-pos-system
+Omnichannel Retail POS and Inventory Management System built using the MERN stack (MongoDB, Express.js, React, Node.js).
 
-Omnichannel Retail POS and Inventory Management System built using the MERN stack (MongoDB, Express.js, React, Node.js). Developed as part of the Infotact Solutions Technical Internship to manage products, process POS transactions, and track inventory across retail stores.
+## Project Purpose
+This project is developed as part of the Infotact Technical Internship Program.
+
+## Tech Stack
+- MongoDB
+- Express.js
+- React.js
+- Node.js
+- Tailwind CSS
+
+## Development Setup
+
+### Start Frontend
+cd frontend
+npm run dev
+
+### Start Backend
+cd backend
+node server.js
