@@ -27,3 +27,17 @@ app.get('/', (req, res) => {
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+const express = require("express");
+
+const app = express();
+
+app.use(express.json());
+
+app.get("/", (req, res) => {
+  res.send("POS Backend running successfully");
+});
+
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
+});
+d85c44443b29b05760c1487aa38676380c0db2f3
