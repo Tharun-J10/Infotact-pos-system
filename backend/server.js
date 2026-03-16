@@ -26,4 +26,13 @@ app.get('/', (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
+// Add this line to parse incoming JSON data (Crucial!)
+app.use(express.json());
+
+// Import and use the new product routes
+const productRoutes = require('./routes/productRoutes');
+app.use('/api/products', productRoutes);
+// Import and use the new sales routes
+const saleRoutes = require('./routes/saleRoutes');
+app.use('/api/sales', saleRoutes);
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
