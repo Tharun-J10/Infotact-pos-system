@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Sale = require('../models/Sale'); // Pulling in the blueprint you just made!
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 // POST: Process a new checkout/sale
 router.post('/', async (req, res) => {
