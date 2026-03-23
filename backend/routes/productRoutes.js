@@ -22,5 +22,6 @@ router.post('/', async (req, res) => {
         res.status(500).json({ message: "Failed to add product", error });
     }
 });
+const { protect, authorize } = require('../middleware/authMiddleware');
 
 module.exports = router;

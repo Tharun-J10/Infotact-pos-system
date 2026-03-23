@@ -28,10 +28,11 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 5000;
 // Add this line to parse incoming JSON data (Crucial!)
 app.use(express.json());
-
+const authRoutes = require('./routes/authRoutes');
 // Import and use the new product routes
 const productRoutes = require('./routes/productRoutes');
 app.use('/api/products', productRoutes);
+app.use('/api/auth', authRoutes);
 // Import and use the new sales routes
 const saleRoutes = require('./routes/saleRoutes');
 app.use('/api/sales', saleRoutes);
