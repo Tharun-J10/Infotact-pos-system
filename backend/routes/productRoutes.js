@@ -1,12 +1,16 @@
+// backend/routes/productRoutes.js
+
 const express = require('express');
 const router = express.Router();
-const Product = require('../models/product');
 
-// 🔐 MOVE THIS TO TOP
+// ✅ Correct model import (capital P)
+const Product = require('../models/Product');
+
+// ✅ Middleware (only once, at top)
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 
-// GET: Fetch all inventory items (any logged-in user)
+// 🔹 GET: Fetch all products (any logged-in user)
 router.get('/', protect, async (req, res) => {
     try {
         const products = await Product.find();
@@ -16,7 +20,8 @@ router.get('/', protect, async (req, res) => {
     }
 });
 
-// POST: Add a new product (only Manager/Admin)
+
+// 🔹 POST: Add new product (only Manager/Admin)
 router.post('/', protect, authorize('Manager', 'System Administrator'), async (req, res) => {
     try {
         const newProduct = new Product(req.body);
