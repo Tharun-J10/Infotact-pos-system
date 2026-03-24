@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const Sale = require('../models/Sale'); // Pulling in the blueprint you just made!
+const Sale = require('../models/Sale'); 
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// POST: Process a new checkout/sale
-router.post('/', async (req, res) => {
+// POST: Process a new checkout/sale (All logged-in employees can do this)
+router.post('/', protect, async (req, res) => {
     try {
         const newSale = new Sale(req.body);
         const savedSale = await newSale.save();
@@ -14,8 +14,8 @@ router.post('/', async (req, res) => {
     }
 });
 
-// GET: View all past sales (Transaction History)
-router.get('/', async (req, res) => {
+// GET: View all past sales (Only Managers & Admins can view financial history)
+router.get('/', protect, authorize('Manager', 'System Administrator'), async (req, res) => {
     try {
         const sales = await Sale.find();
         res.status(200).json(sales);
