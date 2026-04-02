@@ -1,123 +1,86 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { addToCart } from './store/cartSlice';
+import axios from 'axios';
 
 function App() {
-  // --- STATE ---
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
-  
-  const [productId, setProductId] = useState('');
-  const [quantity, setQuantity] = useState(1);
+  const [products, setProducts] = useState([]);
+  const dispatch = useDispatch();
+  const cart = useSelector((state) => state.cart);
 
-  // --- LOGIN FUNCTION ---
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setIsLoggedIn(true); // This magically flips the screen to the Dashboard!
-      } else {
-        alert('❌ Login Failed: ' + (data.message || 'Check credentials'));
+  // Fetch products from your backend
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await axios.get('http://localhost:5000/api/products');
+        setProducts(res.data);
+      } catch (err) {
+        console.error("Error fetching products", err);
       }
-    } catch (error) {
-      alert('❌ Connection Error. Is your backend running?');
-    }
-  };
+    };
+    fetchProducts();
+  }, []);
 
-  // --- CHECKOUT FUNCTION (The Week 2 Engine!) ---
-  const handleCheckout = async (e) => {
-    e.preventDefault();
-    const token = localStorage.getItem('token'); // Grab the security badge!
-
-    try {
-      // Make sure this matches your actual backend route (e.g., /api/sales, /api/orders, etc.)
-      const response = await fetch('http://localhost:5000/api/sales', { 
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // Show the badge to the backend!
-        },
-        body: JSON.stringify({ productId, quantity: Number(quantity) })
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        alert('🛒 Atomic Transaction Complete! Bill Generated Successfully.');
-        setProductId(''); // Clear the form
-        setQuantity(1);
-      } else {
-        alert('❌ Checkout Failed: ' + (data.message || 'Check stock/ID'));
-      }
-    } catch (error) {
-      alert('❌ Connection Error during checkout.');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setIsLoggedIn(false);
-  };
-
-  // --- UI: CASHIER DASHBOARD (If logged in) ---
-  if (isLoggedIn) {
-    return (
-      <div style={{ padding: '50px', fontFamily: 'sans-serif', backgroundColor: '#f4f4f9', minHeight: '100vh' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', width: '400px', marginBottom: '20px' }}>
-          <h2>🛒 Cashier Dashboard</h2>
-          <button onClick={handleLogout} style={{ padding: '8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Logout</button>
-        </div>
-
-        <div style={{ background: 'white', border: '1px solid #ccc', padding: '20px', width: '360px', borderRadius: '8px', boxShadow: '0px 4px 6px rgba(0,0,0,0.1)' }}>
-          <h3 style={{ marginTop: '0' }}>Process New Sale</h3>
-          <form onSubmit={handleCheckout} style={{ display: 'flex', flexDirection: 'column' }}>
-            
-            <label style={{ fontWeight: 'bold' }}>Product ID:</label>
-            <input 
-              type="text" 
-              placeholder="Paste MongoDB Object ID here"
-              value={productId} 
-              onChange={(e) => setProductId(e.target.value)} 
-              required 
-              style={{ marginBottom: '15px', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
-            />
-
-            <label style={{ fontWeight: 'bold' }}>Quantity:</label>
-            <input 
-              type="number" 
-              min="1" 
-              value={quantity} 
-              onChange={(e) => setQuantity(e.target.value)} 
-              required 
-              style={{ marginBottom: '20px', padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
-            />
-
-            <button type="submit" style={{ padding: '12px', background: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>
-              Complete Checkout
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // --- UI: LOGIN SCREEN (If NOT logged in) ---
   return (
-    <div style={{ padding: '50px', fontFamily: 'sans-serif' }}>
-      <h2>Infotact POS - Cashier Login</h2>
-      <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', width: '300px' }}>
-        <label>Email:</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ marginBottom: '15px', padding: '8px' }} />
-        <label>Password:</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ marginBottom: '15px', padding: '8px' }} />
-        <button type="submit" style={{ padding: '10px', background: '#007bff', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>Login to POS</button>
-      </form>
+    <div className="min-h-screen bg-gray-50 p-6 font-sans">
+      {/* Header with Cart Stats */}
+      <header className="max-w-6xl mx-auto flex justify-between items-center mb-10 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div>
+          <h1 className="text-2xl font-extrabold text-blue-700 tracking-tight">INFOTACT POS</h1>
+          <p className="text-gray-500 text-sm">Welcome back, James</p>
+        </div>
+        <div className="text-right">
+          <div className="flex items-center gap-2 justify-end">
+            <span className="text-2xl">🛒</span>
+            <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+              {cart.items.length}
+            </span>
+          </div>
+          <p className="text-lg font-bold text-gray-800 mt-1">
+            Total: <span className="text-green-600">${cart.totalAmount.toFixed(2)}</span>
+          </p>
+        </div>
+      </header>
+
+      {/* Product Grid */}
+      <main className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        {products.length > 0 ? (
+          products.map((product) => (
+            <div key={product._id} className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-300 border border-gray-100 flex flex-col">
+              <div className="h-32 bg-gradient-to-r from-blue-400 to-indigo-500 flex items-center justify-center">
+                 <span className="text-4xl text-white opacity-50">📦</span>
+              </div>
+              <div className="p-6 flex-grow">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-xl font-bold text-gray-900">{product.name}</h3>
+                  <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded uppercase">
+                    In Stock
+                  </span>
+                </div>
+                <p className="text-gray-500 text-sm mb-4">SKU: {product._id.substring(0,8)}</p>
+                <div className="flex justify-between items-center mt-auto">
+                  <span className="text-2xl font-black text-gray-900">${product.price}</span>
+                  <button 
+                    onClick={() => dispatch(addToCart({ 
+                      productId: product._id, 
+                      name: product.name, 
+                      price: product.price 
+                    }))}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors"
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="col-span-full text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
+            <p className="text-gray-400 font-medium">No products found in database.</p>
+            <p className="text-sm text-gray-400">Use Thunder Client or create a Product CRUD page to add items.</p>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
