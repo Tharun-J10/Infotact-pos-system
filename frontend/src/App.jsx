@@ -13,6 +13,11 @@ function App() {
   const [products, setProducts] = useState([]);
   const [view, setView] = useState('pos');
   const [newProduct, setNewProduct] = useState({ name: '', category: '', price: '', stock: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // ✅ NEW: Receipt Modal State
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastOrder, setLastOrder] = useState(null);
 
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.cart);
@@ -56,7 +61,7 @@ function App() {
     localStorage.removeItem('token');
   };
 
-  // --- ADD PRODUCT LOGIC (WITH AUTO-BARCODE) ---
+  // --- ADD PRODUCT LOGIC ---
   const handleAddProduct = async (e) => {
     e.preventDefault();
     try {
@@ -65,7 +70,7 @@ function App() {
         category: newProduct.category,
         price: Number(newProduct.price),
         stock: Number(newProduct.stock),
-        barcode: "SKU-" + Date.now() // Guarantees a unique barcode every time!
+        barcode: "SKU-" + Date.now() 
       }, {
         headers: { Authorization: `Bearer ${token}` } 
       });
@@ -80,16 +85,14 @@ function App() {
     }
   };
 
-  // --- CHECKOUT LOGIC (WITH BULLETPROOF CART CHECKS) ---
+  // --- CHECKOUT LOGIC (NOW TRIGGERS RECEIPT) ---
   const handleCheckout = async () => {
-    // Safely check if cart exists and has items
     if (!cart?.items || cart.items.length === 0) {
       alert("The cart is empty!");
       return;
     }
 
     try {
-      // ✅ FIXED: Pointing to the new backend checkout engine!
       await axios.post('http://localhost:5000/api/products/checkout', {
         orderItems: cart.items,
         totalPrice: cart.totalAmount
@@ -97,15 +100,29 @@ function App() {
         headers: { Authorization: `Bearer ${token}` } 
       });
 
-      alert("Transaction Successful! Stock has been updated.");
+      // ✅ FIXED: Save the order details for the receipt BEFORE clearing the cart
+      setLastOrder({
+        id: "INV-" + Math.floor(Math.random() * 1000000),
+        date: new Date().toLocaleString(),
+        items: [...cart.items],
+        total: cart.totalAmount
+      });
+
       dispatch(clearCart()); 
       fetchProducts(); 
+      setShowReceipt(true); // Pop open the receipt modal!
       
     } catch (err) {
       console.error("Checkout failed", err);
       alert("Checkout Error: " + (err.response?.data?.message || err.message));
     }
   };
+
+  // --- SEARCH FILTER LOGIC ---
+  const filteredProducts = products.filter(product => 
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // ==========================================
   // VIEW 1: THE LOGIN SCREEN 
@@ -140,7 +157,7 @@ function App() {
   // VIEW 2: THE MAIN SYSTEM
   // ==========================================
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
+    <div className="min-h-screen bg-gray-50 p-6 font-sans relative">
       <header className="max-w-6xl mx-auto flex justify-between items-center mb-10 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-2xl font-extrabold text-blue-700 tracking-tight">INFOTACT POS</h1>
@@ -155,11 +172,9 @@ function App() {
             <div className="text-right">
               <div className="flex items-center gap-2 justify-end">
                 <span className="text-2xl">🛒</span>
-                {/* BULLETPROOF CART COUNTER */}
                 <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">{cart?.items?.length || 0}</span>
               </div>
               <p className="text-lg font-bold text-gray-800 mt-1 mb-2">
-                {/* BULLETPROOF TOTAL */}
                 Total: <span className="text-green-600">{formatINR(cart?.totalAmount)}</span>
               </p>
               <button onClick={handleCheckout} className="bg-green-500 hover:bg-green-600 text-white font-extrabold py-2 px-4 rounded shadow-md w-full transition-colors">
@@ -173,38 +188,49 @@ function App() {
 
       {/* POS VIEW */}
       {view === 'pos' && (
-        <main className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {products.length > 0 ? products.map((product) => (
-            <div key={product._id} className="bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 flex flex-col p-6">
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="text-xl font-bold text-gray-900">{product.name}</h3>
-                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded">Stock: {product.stock}</span>
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-8">
+            <input 
+              type="text" 
+              placeholder="🔍 Search products by name or category..." 
+              className="w-full p-4 rounded-xl border border-gray-200 shadow-sm outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <main className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredProducts.length > 0 ? filteredProducts.map((product) => (
+              <div key={product._id} className="bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 flex flex-col p-6">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-xl font-bold text-gray-900">{product.name}</h3>
+                  <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded">Stock: {product.stock}</span>
+                </div>
+                <p className="text-sm text-gray-500 mb-4">{product.category}</p>
+                
+                <div className="flex justify-between items-center mt-auto">
+                  <span className="text-2xl font-black text-gray-900">{formatINR(product.price)}</span>
+                  <button 
+                    onClick={() => dispatch(addToCart({ productId: product._id, name: product.name, price: product.price }))}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg"
+                  >
+                    + Add
+                  </button>
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mb-4">{product.category}</p>
-              
-              <div className="flex justify-between items-center mt-auto">
-                <span className="text-2xl font-black text-gray-900">{formatINR(product.price)}</span>
-                <button 
-                  onClick={() => dispatch(addToCart({ productId: product._id, name: product.name, price: product.price }))}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg"
-                >
-                  + Add
-                </button>
+            )) : (
+              <div className="col-span-full text-center py-20 bg-white rounded border-2 border-dashed border-gray-200">
+                <p className="text-gray-400 font-medium">No products match your search.</p>
               </div>
-            </div>
-          )) : (
-            <div className="col-span-full text-center py-20 bg-white rounded border-2 border-dashed border-gray-200">
-              <p className="text-gray-400 font-medium">No products. Use Manager Dashboard to add stock.</p>
-            </div>
-          )}
-        </main>
+            )}
+          </main>
+        </div>
       )}
 
       {/* MANAGER VIEW */}
       {view === 'manager' && (
         <main className="max-w-6xl mx-auto bg-white p-8 rounded-2xl shadow-md border border-gray-100">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">Inventory Management</h2>
-          
           <form onSubmit={handleAddProduct} className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8 grid grid-cols-1 md:grid-cols-5 gap-4">
             <input type="text" placeholder="Name" required className="p-3 border rounded outline-none" value={newProduct.name} onChange={(e) => setNewProduct({...newProduct, name: e.target.value})} />
             <input type="text" placeholder="Category" required className="p-3 border rounded outline-none" value={newProduct.category} onChange={(e) => setNewProduct({...newProduct, category: e.target.value})} />
@@ -212,7 +238,6 @@ function App() {
             <input type="number" placeholder="Stock" required min="1" className="p-3 border rounded outline-none" value={newProduct.stock} onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})} />
             <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg">Save Product</button>
           </form>
-          
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-100 text-gray-600">
@@ -232,6 +257,62 @@ function App() {
             </tbody>
           </table>
         </main>
+      )}
+
+      {/* ✅ NEW: THE PRINTABLE RECEIPT MODAL */}
+      {showReceipt && lastOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            {/* Receipt Header */}
+            <div className="bg-gray-50 p-6 border-b border-gray-200 text-center">
+              <h2 className="text-2xl font-black text-gray-900 tracking-widest">INFOTACT</h2>
+              <p className="text-gray-500 text-sm mt-1">Official Retail Receipt</p>
+            </div>
+            
+            {/* Receipt Body */}
+            <div className="p-6">
+              <div className="flex justify-between text-sm text-gray-600 mb-6">
+                <div><span className="font-bold">Invoice:</span><br/>{lastOrder.id}</div>
+                <div className="text-right"><span className="font-bold">Date:</span><br/>{lastOrder.date}</div>
+              </div>
+              
+              <div className="border-t border-b border-dashed border-gray-300 py-4 mb-6">
+                <div className="flex justify-between font-bold text-gray-800 mb-2">
+                  <span>Item</span>
+                  <span>Price</span>
+                </div>
+                {/* Dynamically list the items */}
+                {lastOrder.items.map((item, index) => (
+                  <div key={index} className="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>{item.name}</span>
+                    <span>{formatINR(item.price)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center text-xl font-black text-gray-900">
+                <span>TOTAL</span>
+                <span className="text-green-600">{formatINR(lastOrder.total)}</span>
+              </div>
+            </div>
+
+            {/* Receipt Footer/Buttons */}
+            <div className="p-6 bg-gray-50 flex gap-4">
+              <button 
+                onClick={() => window.print()} 
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors"
+              >
+                🖨️ Print Bill
+              </button>
+              <button 
+                onClick={() => setShowReceipt(false)} 
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
