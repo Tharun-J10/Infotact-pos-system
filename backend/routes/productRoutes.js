@@ -29,6 +29,22 @@ router.get('/', protect, async (req, res) => {
  *   post:
  *     summary: Add a new product
  *     tags: [Products]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Laptop
+ *               price:
+ *                 type: number
+ *                 example: 50000
+ *               stock:
+ *                 type: number
+ *                 example: 10
  *     responses:
  *       201:
  *         description: Product created successfully
@@ -49,6 +65,21 @@ router.post('/', protect, authorize('Manager', 'System Administrator'), async (r
  *   post:
  *     summary: Checkout and update stock
  *     tags: [Products]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               orderItems:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     productId:
+ *                       type: string
+ *                       example: 64a123abc
  *     responses:
  *       200:
  *         description: Transaction completed
