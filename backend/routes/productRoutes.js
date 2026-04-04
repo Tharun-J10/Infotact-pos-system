@@ -3,6 +3,7 @@ const router = express.Router();
 
 const Product = require('../models/Product');
 const { protect, authorize } = require('../middleware/authMiddleware');
+const redisClient = require('../config/redisClient');
 
 /**
  * @swagger
@@ -10,79 +11,56 @@ const { protect, authorize } = require('../middleware/authMiddleware');
  *   get:
  *     summary: Get all products
  *     tags: [Products]
- *     responses:
- *       200:
- *         description: List of all products
  */
+
+// 🔒 FINAL: Added protect back
 router.get('/', protect, async (req, res) => {
     try {
+        const cachedData = await redisClient.get('all_products');
+
+        if (cachedData) {
+            console.log("⚡ Serving from Redis");
+            return res.json(JSON.parse(cachedData));
+        }
+
+        console.log("❌ Cache miss");
+
         const products = await Product.find();
+
+        await redisClient.setEx(
+            'all_products',
+            3600,
+            JSON.stringify(products)
+        );
+
+        console.log("📦 Serving from DB");
+
         res.json(products);
+
     } catch (error) {
-        res.status(500).json({ message: "Failed to fetch products", error });
+        res.status(500).json({ message: "Failed to fetch products" });
     }
 });
 
 /**
- * @swagger
- * /api/products:
- *   post:
- *     summary: Add a new product
- *     tags: [Products]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 example: Laptop
- *               price:
- *                 type: number
- *                 example: 50000
- *               stock:
- *                 type: number
- *                 example: 10
- *     responses:
- *       201:
- *         description: Product created successfully
+ * Add product
  */
 router.post('/', protect, authorize('Manager', 'System Administrator'), async (req, res) => {
     try {
         const newProduct = new Product(req.body);
         const savedProduct = await newProduct.save();
+
+        await redisClient.del('all_products');
+
         res.status(201).json(savedProduct);
+
     } catch (error) {
         res.status(500).json({ message: "Failed to add product", error });
     }
 });
 
 /**
- * @swagger
- * /api/products/checkout:
- *   post:
- *     summary: Checkout and update stock
- *     tags: [Products]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               orderItems:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     productId:
- *                       type: string
- *                       example: 64a123abc
- *     responses:
- *       200:
- *         description: Transaction completed
+ * Checkout
  */
 router.post('/checkout', protect, async (req, res) => {
     try {
@@ -90,13 +68,21 @@ router.post('/checkout', protect, async (req, res) => {
 
         for (let item of orderItems) {
             await Product.findByIdAndUpdate(item.productId, {
-                $inc: { stock: -1 }
+                $inc: { stock: -item.quantity }
             });
         }
 
-        res.status(200).json({ message: "Transaction Complete! Stock updated." });
+        await redisClient.del('all_products');
+
+        res.status(200).json({
+            message: "Transaction Complete! Stock updated."
+        });
+
     } catch (error) {
-        res.status(500).json({ message: "Failed to process checkout", error: error.message });
+        res.status(500).json({
+            message: "Failed to process checkout",
+            error: error.message
+        });
     }
 });
 
