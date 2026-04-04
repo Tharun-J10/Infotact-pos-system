@@ -4,20 +4,17 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const { errorHandler } = require('./middleware/errorMiddleware');
 
-// ✅ Swagger imports
 const swaggerUI = require('swagger-ui-express');
 const swaggerJsDoc = require('swagger-jsdoc');
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ Swagger config (ADD HERE)
+// ✅ Swagger config with JWT
 const options = {
   definition: {
     openapi: "3.0.0",
@@ -29,6 +26,20 @@ const options = {
     servers: [
       { url: "http://localhost:5000" }
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
   },
   apis: ["./routes/*.js"],
 };
@@ -36,7 +47,7 @@ const options = {
 const specs = swaggerJsDoc(options);
 app.use("/api-docs", swaggerUI.serve, swaggerUI.setup(specs));
 
-// Connect to MongoDB
+// MongoDB
 mongoose.connect(process.env.MONGO_URI, { family: 4 })
   .then(() => console.log("✅ MongoDB Connected Successfully!"))
   .catch(err => console.log("❌ MongoDB Connection Error:", err));
