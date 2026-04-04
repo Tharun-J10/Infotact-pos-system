@@ -3,6 +3,6 @@ import cartReducer from './cartSlice';
 
 export const store = configureStore({
   reducer: {
-    cart: cartReducer,
+    cart: cartReducer, // <-- This is the connection we need!
   },
 });
