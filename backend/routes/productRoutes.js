@@ -4,7 +4,16 @@ const router = express.Router();
 const Product = require('../models/Product');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// Fetch all products
+/**
+ * @swagger
+ * /api/products:
+ *   get:
+ *     summary: Get all products
+ *     tags: [Products]
+ *     responses:
+ *       200:
+ *         description: List of all products
+ */
 router.get('/', protect, async (req, res) => {
     try {
         const products = await Product.find();
@@ -14,7 +23,16 @@ router.get('/', protect, async (req, res) => {
     }
 });
 
-// Add product
+/**
+ * @swagger
+ * /api/products:
+ *   post:
+ *     summary: Add a new product
+ *     tags: [Products]
+ *     responses:
+ *       201:
+ *         description: Product created successfully
+ */
 router.post('/', protect, authorize('Manager', 'System Administrator'), async (req, res) => {
     try {
         const newProduct = new Product(req.body);
@@ -25,7 +43,16 @@ router.post('/', protect, authorize('Manager', 'System Administrator'), async (r
     }
 });
 
-// Checkout
+/**
+ * @swagger
+ * /api/products/checkout:
+ *   post:
+ *     summary: Checkout and update stock
+ *     tags: [Products]
+ *     responses:
+ *       200:
+ *         description: Transaction completed
+ */
 router.post('/checkout', protect, async (req, res) => {
     try {
         const { orderItems } = req.body;
