@@ -12,12 +12,21 @@ function App() {
   // --- APP STATE ---
   const [products, setProducts] = useState([]);
   const [view, setView] = useState('pos');
+  const [managerTab, setManagerTab] = useState('inventory');
   const [newProduct, setNewProduct] = useState({ name: '', category: '', price: '', stock: '' });
   const [searchQuery, setSearchQuery] = useState('');
 
   // --- RECEIPT MODAL STATE ---
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
+  const [amountTendered, setAmountTendered] = useState('');
+  const [showTenderModal, setShowTenderModal] = useState(false);
+
+  // --- STAFF MANAGEMENT STATE ---
+  const [staffName, setStaffName] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [staffRole, setStaffRole] = useState('Cashier');
 
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.cart);
@@ -88,6 +97,40 @@ function App() {
     }
   };
 
+  // --- REGISTER STAFF LOGIC ---
+  const handleRegisterStaff = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post('http://localhost:5000/api/auth/register', {
+        name: staffName,
+        email: staffEmail,
+        password: staffPassword,
+        role: staffRole
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      alert(`Success! ${staffName} has been registered as a ${staffRole}.`);
+      
+      setStaffName('');
+      setStaffEmail('');
+      setStaffPassword('');
+      setStaffRole('Cashier');
+    } catch (err) {
+      console.error("Failed to register staff", err);
+      alert("Registration Error: " + (err.response?.data?.message || err.message));
+    }
+  };
+
+  // --- OPEN TENDER MODAL ---
+  const handleOpenTender = () => {
+    if (!cart?.items || cart.items.length === 0) {
+      alert("The cart is empty!");
+      return;
+    }
+    setShowTenderModal(true);
+  };
+
   // --- CHECKOUT LOGIC (NOW TRIGGERS RECEIPT) ---
   const handleCheckout = async () => {
     if (!cart?.items || cart.items.length === 0) {
@@ -117,6 +160,27 @@ function App() {
     } catch (err) {
       console.error("Checkout failed", err);
       alert("Checkout Error: " + (err.response?.data?.message || err.message));
+    }
+  };
+
+  // --- REFUND LOGIC ---
+  const handleRefund = async () => {
+    if (!lastOrder) return;
+    
+    try {
+      await axios.post('http://localhost:5000/api/products/refund', {
+        orderItems: lastOrder.items
+      }, {
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+
+      alert("Refund Successful! Items have been restocked.");
+      setLastOrder(null); // Clear the canceled order from the screen
+      fetchProducts(); // Refresh the inventory UI
+      
+    } catch (err) {
+      console.error("Refund failed", err);
+      alert("Refund Error: " + (err.response?.data?.message || err.message));
     }
   };
 
@@ -178,7 +242,7 @@ function App() {
               <p className="text-lg font-bold text-gray-800 mt-1 mb-2">
                 Total: <span className="text-green-600">{formatINR(cart?.totalAmount)}</span>
               </p>
-              <button onClick={handleCheckout} className="bg-green-500 hover:bg-green-600 text-white font-extrabold py-2 px-4 rounded shadow-md w-full transition-colors">
+              <button onClick={handleOpenTender} className="bg-green-500 hover:bg-green-600 text-white font-extrabold py-2 px-4 rounded shadow-md w-full transition-colors">
                 Complete Checkout
               </button>
             </div>
@@ -212,10 +276,8 @@ function App() {
                 <div className="flex justify-between items-center mt-auto">
                   <span className="text-2xl font-black text-gray-900">{formatINR(product.price)}</span>
                   
-                  {/* ✅ THE FIXED ADD BUTTON WITH TRACKER */}
                   <button 
                     onClick={() => {
-                      console.log("🟢 BUTTON CLICKED! Sending to Redux:", product.name);
                       dispatch(addToCart({ productId: product._id, name: product.name, price: product.price }));
                     }}
                     disabled={product.stock <= 0}
@@ -242,33 +304,203 @@ function App() {
       {/* MANAGER VIEW */}
       {view === 'manager' && (
         <main className="max-w-6xl mx-auto bg-white p-8 rounded-2xl shadow-md border border-gray-100">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Inventory Management</h2>
-          <form onSubmit={handleAddProduct} className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8 grid grid-cols-1 md:grid-cols-5 gap-4">
-            <input type="text" placeholder="Name" required className="p-3 border rounded outline-none" value={newProduct.name} onChange={(e) => setNewProduct({...newProduct, name: e.target.value})} />
-            <input type="text" placeholder="Category" required className="p-3 border rounded outline-none" value={newProduct.category} onChange={(e) => setNewProduct({...newProduct, category: e.target.value})} />
-            <input type="number" placeholder="Price (₹)" required min="0" step="0.01" className="p-3 border rounded outline-none" value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} />
-            <input type="number" placeholder="Stock" required min="1" className="p-3 border rounded outline-none" value={newProduct.stock} onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})} />
-            <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg">Save Product</button>
-          </form>
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-100 text-gray-600">
-                <th className="p-3">ID</th><th className="p-3">Name</th><th className="p-3">Category</th><th className="p-3">Price</th><th className="p-3">Stock</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map(p => (
-                <tr key={p._id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 text-sm font-mono text-gray-500">{p._id.substring(0,8)}...</td>
-                  <td className="p-3 font-medium">{p.name}</td>
-                  <td className="p-3 text-gray-500">{p.category}</td>
-                  <td className="p-3 text-green-600 font-bold">{formatINR(p.price)}</td>
-                  <td className="p-3">{p.stock}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </main>
+          
+          {/* THE NEW TOGGLE TABS */}
+          <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
+            <h2 className="text-2xl font-bold text-gray-800">Manager Dashboard</h2>
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+              <button 
+                onClick={() => setManagerTab('inventory')}
+                className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'inventory' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                📦 Inventory
+              </button>
+              <button 
+                onClick={() => setManagerTab('sales')}
+                className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                📈 Sales Analytics
+              </button>
+              <button 
+                onClick={() => setManagerTab('staff')}
+                className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'staff' ? 'bg-white shadow text-green-700' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                👥 Staff Management
+              </button>
+            </div>
+          </div>
+
+          {/* SUB-TAB 1: INVENTORY */}
+          {managerTab === 'inventory' && (
+            <div className="animate-fade-in">
+              <form onSubmit={handleAddProduct} className="bg-gray-50 p-6 rounded-xl border border-gray-200 mb-8 grid grid-cols-1 md:grid-cols-5 gap-4">
+                <input type="text" placeholder="Name" required className="p-3 border rounded outline-none" value={newProduct.name} onChange={(e) => setNewProduct({...newProduct, name: e.target.value})} />
+                <input type="text" placeholder="Category" required className="p-3 border rounded outline-none" value={newProduct.category} onChange={(e) => setNewProduct({...newProduct, category: e.target.value})} />
+                <input type="number" placeholder="Price (₹)" required min="0" step="0.01" className="p-3 border rounded outline-none" value={newProduct.price} onChange={(e) => setNewProduct({...newProduct, price: e.target.value})} />
+                <input type="number" placeholder="Stock" required min="1" className="p-3 border rounded outline-none" value={newProduct.stock} onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})} />
+                <button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg">Save Product</button>
+              </form>
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-600">
+                    <th className="p-3">ID</th><th className="p-3">Name</th><th className="p-3">Category</th><th className="p-3">Price</th><th className="p-3">Stock</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map(p => (
+                    <tr key={p._id} className="border-b hover:bg-gray-50">
+                      <td className="p-3 text-sm font-mono text-gray-500">{p._id.substring(0,8)}...</td>
+                      <td className="p-3 font-medium">{p.name}</td>
+                      <td className="p-3 text-gray-500">{p.category}</td>
+                      <td className="p-3 text-green-600 font-bold">{formatINR(p.price)}</td>
+                      <td className="p-3">{p.stock}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* SUB-TAB 2: SALES ANALYTICS */}
+          {managerTab === 'sales' && (
+            <div className="bg-blue-50 border border-blue-100 p-10 rounded-xl text-center animate-fade-in">
+              <div className="text-5xl mb-4">📊</div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Live Sales Feed</h3>
+              <p className="text-gray-500 mb-8">Monitoring transactions for the current session.</p>
+              
+              {lastOrder ? (
+                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 inline-block text-left min-w-[300px]">
+                    <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
+                      <span className="text-gray-500 font-bold text-sm">LATEST TRANSACTION</span>
+                      <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full">Completed</span>
+                    </div>
+                    <p className="text-gray-500 mb-1">Invoice: <span className="font-mono text-gray-800">{lastOrder.id}</span></p>
+                    <p className="text-sm text-gray-400 mb-4">{lastOrder.date}</p>
+                    
+                    <div className="flex justify-between items-end mt-4 pt-4 border-t border-dashed border-gray-200">
+                      <span className="text-gray-600 font-bold">Revenue:</span>
+                      <span className="text-3xl font-black text-green-600">{formatINR(lastOrder.total)}</span>
+                    </div>
+                    
+                    {/* ✅ THE REFUND BUTTON IS SAFELY PLACED HERE */}
+                    <button 
+                      onClick={handleRefund}
+                      className="w-full mt-6 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white font-bold py-3 rounded-lg transition-colors border border-red-200 hover:border-red-600"
+                    >
+                      🛑 Cancel Transaction & Restock
+                    </button>
+
+                 </div>
+              ) : (
+                 <div className="bg-white p-8 rounded-xl border-2 border-dashed border-gray-200 max-w-md mx-auto">
+                    <p className="text-gray-500 font-medium">No sales recorded in this session yet.</p>
+                    <p className="text-sm text-gray-400 mt-2">Go to the Cashier Terminal and complete a checkout to see live data populate here!</p>
+                 </div>
+              )}
+            </div>
+          )}
+
+          {/* SUB-TAB 3: STAFF MANAGEMENT */}
+          {managerTab === 'staff' && (
+            <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm animate-fade-in max-w-2xl mx-auto">
+              <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <span className="text-3xl">👤</span>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800">Register New Staff Member</h3>
+                  <p className="text-sm text-gray-500">Create secure accounts for new cashiers or managers.</p>
+                </div>
+              </div>
+              
+              <form onSubmit={handleRegisterStaff} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
+                    <input type="text" required className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="e.g. John Doe" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">System Role</label>
+                    <select className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500 bg-white" value={staffRole} onChange={(e) => setStaffRole(e.target.value)}>
+                      <option value="Cashier">Cashier (Terminal Only)</option>
+                      <option value="Manager">Manager (Full Access)</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
+                  <input type="email" required className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={staffEmail} onChange={(e) => setStaffEmail(e.target.value)} placeholder="employee@infotact.com" />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Temporary Password</label>
+                  <input type="password" required className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} placeholder="••••••••" />
+                </div>
+                
+                <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mt-2">
+                  Create Account
+                </button>
+              </form>
+            </div>
+          )}
+
+        </main> 
+      )}
+
+      {/* TENDER CALCULATOR MODAL */}
+      {showTenderModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4 text-center">Payment Tender</h2>
+            
+            <div className="flex justify-between text-lg mb-4">
+              <span className="text-gray-600">Total Due:</span>
+              <span className="font-bold text-red-600">{formatINR(cart?.totalAmount)}</span>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-2">Cash Received (₹)</label>
+              <input 
+                type="number" 
+                min="0"
+                className="w-full p-4 border border-gray-300 rounded-lg outline-none text-xl font-bold text-center"
+                placeholder="0.00"
+                value={amountTendered}
+                onChange={(e) => setAmountTendered(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-between text-xl mb-8 border-t border-gray-200 pt-4">
+              <span className="text-gray-600 font-bold">Change Due:</span>
+              <span className={`font-black ${Number(amountTendered) >= cart?.totalAmount ? 'text-green-600' : 'text-gray-400'}`}>
+                {amountTendered && Number(amountTendered) >= cart?.totalAmount 
+                  ? formatINR(Number(amountTendered) - cart?.totalAmount) 
+                  : "₹0.00"}
+              </span>
+            </div>
+
+            <div className="flex gap-4">
+              <button onClick={() => setShowTenderModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setShowTenderModal(false);
+                  handleCheckout();
+                  setAmountTendered(''); 
+                }} 
+                disabled={Number(amountTendered) < cart?.totalAmount}
+                className={`flex-1 font-bold py-3 rounded-lg transition-colors ${
+                  Number(amountTendered) >= cart?.totalAmount 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                Confirm Payment
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* THE PRINTABLE RECEIPT MODAL */}
@@ -309,7 +541,6 @@ function App() {
               <button onClick={() => window.print()} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">
                 🖨️ Print Bill
               </button>
-              {/* ✅ THE RESTORED CLOSE BUTTON */}
               <button onClick={() => setShowReceipt(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-lg transition-colors">
                 Close
               </button>

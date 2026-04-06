@@ -27,7 +27,7 @@ router.get('/', protect, async (req, res) => {
 
         res.json(products);
     } catch (error) {
-        console.error("GET Products Error:", error); // 🚨 Now it will print in terminal!
+        console.error("GET Products Error:", error); 
         res.status(500).json({ message: "Failed to fetch products" });
     }
 });
@@ -46,7 +46,7 @@ router.post('/', protect, authorize('Manager', 'System Administrator'), async (r
         res.status(201).json(savedProduct);
 
     } catch (error) {
-        console.error("POST Product Error:", error); // 🚨 Now it will print in terminal!
+        console.error("POST Product Error:", error); 
         res.status(500).json({ message: "Failed to add product", error });
     }
 });
@@ -72,12 +72,34 @@ router.post('/checkout', protect, async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Checkout Error:", error); // 🚨 Now it will print in terminal!
+        console.error("Checkout Error:", error); 
         res.status(500).json({
             message: "Failed to process checkout",
             error: error.message
         });
     }
+});
+
+// --- REFUND & RESTOCK LOGIC ---
+router.post('/refund', protect, async (req, res) => {
+  try {
+    const { orderItems } = req.body;
+    
+    // Loop through the returned items and add +1 back to the stock in the database
+    for (let item of orderItems) {
+      // Depending on your schema, the ID might be in item.productId or item._id
+      const idToRestock = item.productId || item._id; 
+      
+      // Find the product and increment ($inc) the stock by 1
+      await Product.findByIdAndUpdate(idToRestock, { $inc: { stock: 1 } });
+    }
+
+    console.log("🛑 Refund successful! Stock restored.");
+    res.status(200).json({ message: 'Refund successful! Stock has been restored.' });
+  } catch (error) {
+    console.error("Refund Error:", error);
+    res.status(500).json({ message: 'Failed to process refund: ' + error.message });
+  }
 });
 
 module.exports = router;
