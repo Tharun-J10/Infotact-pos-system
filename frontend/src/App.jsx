@@ -4,8 +4,9 @@ import { addToCart, clearCart } from './store/cartSlice';
 import axios from 'axios';
 
 function App() {
-  // --- AUTHENTICATION STATE ---
+  // --- AUTHENTICATION & ROLE STATE ---
   const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [userRole, setUserRole] = useState(localStorage.getItem('userRole') || 'Manager');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -53,24 +54,53 @@ function App() {
     fetchProducts();
   }, [token]);
 
-  // --- LOGIN LOGIC ---
+  // --- LOGIN LOGIC WITH BULLETPROOF ROLE DETECTION ---
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
       const receivedToken = res.data.token;
       
+      // 🔐 SMART ROLE DETECTION
+      let finalRole = res.data.role || (res.data.user && res.data.user.role);
+      
+      if (!finalRole) {
+        try {
+          const payload = JSON.parse(atob(receivedToken.split('.')[1]));
+          finalRole = payload.role;
+        } catch (e) {
+          console.error("Token decode error", e);
+        }
+      }
+      
+      if (!finalRole) {
+          finalRole = 'Cashier'; 
+      }
+
+      finalRole = finalRole.charAt(0).toUpperCase() + finalRole.slice(1).toLowerCase();
+
       setToken(receivedToken);
+      setUserRole(finalRole);
+      
       localStorage.setItem('token', receivedToken);
+      localStorage.setItem('userRole', finalRole);
+
+      if (finalRole !== 'Manager') {
+        setView('pos');
+      }
+
     } catch (err) {
       alert("Login failed! Check your credentials or terminal.");
       console.error(err);
     }
   };
 
+  // ✅ THE MISSING LOGOUT FUNCTION!
   const handleLogout = () => {
     setToken('');
+    setUserRole('');
     localStorage.removeItem('token');
+    localStorage.removeItem('userRole');
   };
 
   // --- ADD PRODUCT LOGIC ---
@@ -131,7 +161,7 @@ function App() {
     setShowTenderModal(true);
   };
 
-  // --- CHECKOUT LOGIC (NOW TRIGGERS RECEIPT) ---
+  // --- CHECKOUT LOGIC ---
   const handleCheckout = async () => {
     if (!cart?.items || cart.items.length === 0) {
       alert("The cart is empty!");
@@ -175,8 +205,8 @@ function App() {
       });
 
       alert("Refund Successful! Items have been restocked.");
-      setLastOrder(null); // Clear the canceled order from the screen
-      fetchProducts(); // Refresh the inventory UI
+      setLastOrder(null); 
+      fetchProducts(); 
       
     } catch (err) {
       console.error("Refund failed", err);
@@ -184,10 +214,13 @@ function App() {
     }
   };
 
-  const filteredProducts = products.filter(product => 
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // --- BULLETPROOF SEARCH FILTER ---
+  const filteredProducts = products.filter(product => {
+    const pName = product?.name || '';
+    const pCat = product?.category || '';
+    const query = searchQuery || '';
+    return pName.toLowerCase().includes(query.toLowerCase()) || pCat.toLowerCase().includes(query.toLowerCase());
+  });
 
   // ==========================================
   // VIEW 1: THE LOGIN SCREEN 
@@ -199,13 +232,13 @@ function App() {
           <div className="text-center mb-8">
             <div className="bg-blue-100 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🔒</div>
             <h2 className="text-2xl font-extrabold text-gray-900">Infotact Security</h2>
-            <p className="text-gray-500 text-sm mt-2">Enter manager credentials to access POS</p>
+            <p className="text-gray-500 text-sm mt-2">Enter your credentials to access POS</p>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
-              <input type="email" required className="w-full p-3 border border-gray-300 rounded-lg outline-none" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="manager@store.com" />
+              <input type="email" required className="w-full p-3 border border-gray-300 rounded-lg outline-none" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="employee@store.com" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Password</label>
@@ -228,7 +261,11 @@ function App() {
           <h1 className="text-2xl font-extrabold text-blue-700 tracking-tight">INFOTACT POS</h1>
           <div className="mt-2 flex gap-2">
             <button onClick={() => setView('pos')} className={`px-4 py-1 text-sm font-bold rounded ${view === 'pos' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Cashier Terminal</button>
-            <button onClick={() => setView('manager')} className={`px-4 py-1 text-sm font-bold rounded ${view === 'manager' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Manager Dashboard</button>
+            
+            {/* 🛑 SECURITY IN ACTION: Only show Manager button if they are a Manager! */}
+            {userRole === 'Manager' && (
+              <button onClick={() => setView('manager')} className={`px-4 py-1 text-sm font-bold rounded ${view === 'manager' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'}`}>Manager Dashboard</button>
+            )}
           </div>
         </div>
         
@@ -247,7 +284,11 @@ function App() {
               </button>
             </div>
           )}
-          <button onClick={handleLogout} className="bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded font-bold text-sm transition">Logout</button>
+          
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-bold bg-gray-200 text-gray-600 px-3 py-1 rounded-full">{userRole}</span>
+            <button onClick={handleLogout} className="bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded font-bold text-sm transition">Logout</button>
+          </div>
         </div>
       </header>
 
@@ -301,32 +342,17 @@ function App() {
         </div>
       )}
 
-      {/* MANAGER VIEW */}
-      {view === 'manager' && (
+      {/* MANAGER VIEW (Only renders if userRole is Manager) */}
+      {view === 'manager' && userRole === 'Manager' && (
         <main className="max-w-6xl mx-auto bg-white p-8 rounded-2xl shadow-md border border-gray-100">
           
           {/* THE NEW TOGGLE TABS */}
           <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
             <h2 className="text-2xl font-bold text-gray-800">Manager Dashboard</h2>
             <div className="flex bg-gray-100 p-1 rounded-lg">
-              <button 
-                onClick={() => setManagerTab('inventory')}
-                className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'inventory' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                📦 Inventory
-              </button>
-              <button 
-                onClick={() => setManagerTab('sales')}
-                className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                📈 Sales Analytics
-              </button>
-              <button 
-                onClick={() => setManagerTab('staff')}
-                className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'staff' ? 'bg-white shadow text-green-700' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                👥 Staff Management
-              </button>
+              <button onClick={() => setManagerTab('inventory')} className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'inventory' ? 'bg-white shadow text-purple-700' : 'text-gray-500 hover:text-gray-700'}`}>📦 Inventory</button>
+              <button onClick={() => setManagerTab('sales')} className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'sales' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}>📈 Sales Analytics</button>
+              <button onClick={() => setManagerTab('staff')} className={`px-6 py-2 font-bold rounded-md transition-colors ${managerTab === 'staff' ? 'bg-white shadow text-green-700' : 'text-gray-500 hover:text-gray-700'}`}>👥 Staff Management</button>
             </div>
           </div>
 
@@ -382,14 +408,9 @@ function App() {
                       <span className="text-3xl font-black text-green-600">{formatINR(lastOrder.total)}</span>
                     </div>
                     
-                    {/* ✅ THE REFUND BUTTON IS SAFELY PLACED HERE */}
-                    <button 
-                      onClick={handleRefund}
-                      className="w-full mt-6 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white font-bold py-3 rounded-lg transition-colors border border-red-200 hover:border-red-600"
-                    >
+                    <button onClick={handleRefund} className="w-full mt-6 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white font-bold py-3 rounded-lg transition-colors border border-red-200 hover:border-red-600">
                       🛑 Cancel Transaction & Restock
                     </button>
-
                  </div>
               ) : (
                  <div className="bg-white p-8 rounded-xl border-2 border-dashed border-gray-200 max-w-md mx-auto">
@@ -436,13 +457,10 @@ function App() {
                   <input type="password" required className="w-full p-3 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-green-500" value={staffPassword} onChange={(e) => setStaffPassword(e.target.value)} placeholder="••••••••" />
                 </div>
                 
-                <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mt-2">
-                  Create Account
-                </button>
+                <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors mt-2">Create Account</button>
               </form>
             </div>
           )}
-
         </main> 
       )}
 
@@ -459,45 +477,19 @@ function App() {
 
             <div className="mb-6">
               <label className="block text-sm font-bold text-gray-700 mb-2">Cash Received (₹)</label>
-              <input 
-                type="number" 
-                min="0"
-                className="w-full p-4 border border-gray-300 rounded-lg outline-none text-xl font-bold text-center"
-                placeholder="0.00"
-                value={amountTendered}
-                onChange={(e) => setAmountTendered(e.target.value)}
-                autoFocus
-              />
+              <input type="number" min="0" className="w-full p-4 border border-gray-300 rounded-lg outline-none text-xl font-bold text-center" placeholder="0.00" value={amountTendered} onChange={(e) => setAmountTendered(e.target.value)} autoFocus />
             </div>
 
             <div className="flex justify-between text-xl mb-8 border-t border-gray-200 pt-4">
               <span className="text-gray-600 font-bold">Change Due:</span>
               <span className={`font-black ${Number(amountTendered) >= cart?.totalAmount ? 'text-green-600' : 'text-gray-400'}`}>
-                {amountTendered && Number(amountTendered) >= cart?.totalAmount 
-                  ? formatINR(Number(amountTendered) - cart?.totalAmount) 
-                  : "₹0.00"}
+                {amountTendered && Number(amountTendered) >= cart?.totalAmount ? formatINR(Number(amountTendered) - cart?.totalAmount) : "₹0.00"}
               </span>
             </div>
 
             <div className="flex gap-4">
-              <button onClick={() => setShowTenderModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button 
-                onClick={() => {
-                  setShowTenderModal(false);
-                  handleCheckout();
-                  setAmountTendered(''); 
-                }} 
-                disabled={Number(amountTendered) < cart?.totalAmount}
-                className={`flex-1 font-bold py-3 rounded-lg transition-colors ${
-                  Number(amountTendered) >= cart?.totalAmount 
-                    ? 'bg-green-600 hover:bg-green-700 text-white' 
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                Confirm Payment
-              </button>
+              <button onClick={() => setShowTenderModal(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-lg transition-colors">Cancel</button>
+              <button onClick={() => { setShowTenderModal(false); handleCheckout(); setAmountTendered(''); }} disabled={Number(amountTendered) < cart?.totalAmount} className={`flex-1 font-bold py-3 rounded-lg transition-colors ${Number(amountTendered) >= cart?.totalAmount ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>Confirm Payment</button>
             </div>
           </div>
         </div>
@@ -505,51 +497,67 @@ function App() {
 
       {/* THE PRINTABLE RECEIPT MODAL */}
       {showReceipt && lastOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
-            <div className="bg-gray-50 p-6 border-b border-gray-200 text-center">
-              <h2 className="text-2xl font-black text-gray-900 tracking-widest">INFOTACT</h2>
-              <p className="text-gray-500 text-sm mt-1">Official Retail Receipt</p>
-            </div>
-            
-            <div className="p-6">
-              <div className="flex justify-between text-sm text-gray-600 mb-6">
-                <div><span className="font-bold">Invoice:</span><br/>{lastOrder.id}</div>
-                <div className="text-right"><span className="font-bold">Date:</span><br/>{lastOrder.date}</div>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 print:bg-white print:p-0">
+          <div className="bg-white rounded max-w-sm w-full overflow-hidden flex flex-col shadow-2xl print:shadow-none print:max-w-full">
+            <div className="p-6 font-mono text-gray-800 bg-white" id="printable-bill">
+              <div className="text-center mb-4">
+                <h2 className="text-2xl font-black tracking-widest uppercase">INFOTACT POS</h2>
+                <p className="text-xs mt-1">123 Tech Avenue, Silicon City</p>
+                <p className="text-xs">Phone: +91 98765 43210</p>
+                <p className="text-sm mt-2 font-bold uppercase border-y border-dashed border-gray-400 py-1">Tax Invoice (Cash Bill)</p>
               </div>
               
-              <div className="border-t border-b border-dashed border-gray-300 py-4 mb-6">
-                <div className="flex justify-between font-bold text-gray-800 mb-2">
-                  <span>Item</span>
-                  <span>Price</span>
+              <div className="text-xs mb-4">
+                <div className="flex justify-between mb-1">
+                  <span>Bill No:</span><span className="font-bold">{lastOrder.id.replace('INV-', '')}</span>
                 </div>
-                {lastOrder.items.map((item, index) => (
-                  <div key={index} className="flex justify-between text-sm text-gray-600 mb-2">
-                    <span>{item.name}</span>
-                    <span>{formatINR(item.price)}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between">
+                  <span>Date:</span><span>{lastOrder.date}</span>
+                </div>
               </div>
-
-              <div className="flex justify-between items-center text-xl font-black text-gray-900">
-                <span>TOTAL</span>
-                <span className="text-green-600">{formatINR(lastOrder.total)}</span>
+              
+              <table className="w-full text-left text-xs mb-4">
+                <thead>
+                  <tr className="border-b border-dashed border-gray-400">
+                    <th className="py-2 w-1/2">ITEM</th><th className="py-2 text-center">QTY</th><th className="py-2 text-right">RATE</th><th className="py-2 text-right">AMT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lastOrder.items.map((item, index) => {
+                    const qty = item.quantity || 1; 
+                    const rate = item.price;
+                    const amount = qty * rate;
+                    return (
+                      <tr key={index} className="border-b border-dotted border-gray-200">
+                        <td className="py-2 pr-2">{item.name}</td><td className="py-2 text-center">{qty}</td><td className="py-2 text-right">{rate.toFixed(2)}</td><td className="py-2 text-right font-bold">{amount.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              
+              <div className="border-t-2 border-dashed border-gray-800 pt-2 mb-6">
+                <div className="flex justify-between items-center text-lg font-black">
+                  <span>TOTAL:</span><span>{formatINR(lastOrder.total)}</span>
+                </div>
+              </div>
+              
+              <div className="text-center border-t border-dashed border-gray-400 pt-4">
+                <p className="text-xs font-bold uppercase">Thank you for shopping!</p>
+                <p className="text-xs mt-1">Please visit again.</p>
+                <p className="text-[10px] text-gray-400 mt-3">Powered by Infotact Systems</p>
               </div>
             </div>
 
-            <div className="p-6 bg-gray-50 flex gap-4">
-              <button onClick={() => window.print()} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">
-                🖨️ Print Bill
-              </button>
-              <button onClick={() => setShowReceipt(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-lg transition-colors">
-                Close
-              </button>
+            <div className="p-4 bg-gray-100 flex gap-3 print:hidden border-t border-gray-200">
+              <button onClick={() => window.print()} className="flex-1 bg-gray-800 hover:bg-black text-white font-bold py-3 rounded transition-colors shadow">🖨️ Print Bill</button>
+              <button onClick={() => setShowReceipt(false)} className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-3 rounded transition-colors">Close</button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
+    </div> 
+  ); 
+} 
 
 export default App;
