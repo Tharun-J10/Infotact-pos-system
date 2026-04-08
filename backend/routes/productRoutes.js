@@ -101,5 +101,41 @@ router.post('/refund', protect, async (req, res) => {
     res.status(500).json({ message: 'Failed to process refund: ' + error.message });
   }
 });
+// --- UPDATE PRODUCT STOCK (RESTOCK) ---
+router.put('/:id', protect, async (req, res) => {
+  try {
+    const { stock } = req.body;
+    
+    const updatedProduct = await Product.findByIdAndUpdate(
+      req.params.id, 
+      { stock: stock }, 
+      { new: true } 
+    );
 
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.status(200).json(updatedProduct);
+  } catch (err) {
+    console.error("Error updating product stock:", err);
+    res.status(500).json({ message: "Server error while updating stock" });
+  }
+});
+// --- DELETE PRODUCT LOGIC ---
+router.delete('/:id', protect, async (req, res) => {
+  try {
+    // Find the product by its ID and delete it from MongoDB
+    const deletedProduct = await Product.findByIdAndDelete(req.params.id);
+
+    if (!deletedProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.status(200).json({ message: "Product deleted successfully!" });
+  } catch (err) {
+    console.error("Error deleting product:", err);
+    res.status(500).json({ message: "Server error while deleting product" });
+  }
+});
 module.exports = router;
