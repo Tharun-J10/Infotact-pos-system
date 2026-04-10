@@ -476,7 +476,9 @@ function App() {
                     <p className="text-blue-900 font-bold text-lg">Awaiting transactions...</p>
                     <p className="text-sm text-blue-600/70 mt-2 font-medium">Process a checkout in the Cashier Terminal to see live data populate here.</p>
                  </div>
-              )}
+              )}<div className="mt-12">
+  <InventoryChart products={products} />
+</div>
             </motion.div>
           )}
 
@@ -659,4 +661,4 @@ function App() {
   ); 
 } 
 
-export default App;
+export default App;  
